@@ -30,7 +30,8 @@ venueGE_raw <- GET(url = "https://app.ticketmaster.com/discovery/v2/venues?",
 content <- content(venueGE_raw)
 
 # extract json
-json_content <- content(venueGE_raw, as = 'text')
+json_content_page <- content(venueGE_raw, as = 'text')
+
 # write to data frame & subset
 venueGE <- data.frame(fromJSON(json_content, flatten=TRUE)[[1]][[1]]) %>%
   select('name', 'city.name', 'postalCode', 'address.line1', 'url', 'location.longitude', 'location.latitude')
@@ -44,8 +45,8 @@ n <- 100
 print(n)
 
 # Number of complete pages:
-pages <- floor(n/20)
-print(pages)
+maxpage <- floor(n/20)
+print(maxpage)
 
 # Number of entries on the last incomplete page:
 remainder <- n-20*floor(n/20)
@@ -62,7 +63,7 @@ allvenues_short <- data.frame(
   latitude = character(n))
 
 # We loop over the complete pages with 10 entries each:
-for (i in 1:pages) {
+for (i in 1:maxpage) {
   allvenues <- GET("https://app.ticketmaster.com/discovery/v2/venues?", 
                     query = list(apikey = apikey,
                                  countryCode = "DE",
@@ -80,24 +81,6 @@ for (i in 1:pages) {
   # pause in loop
   Sys.sleep(0.2)
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 # The last page is incomplete, hence we add it manually outside 
