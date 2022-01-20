@@ -14,84 +14,155 @@ library(devtools)
 library(tidyverse)
 library(jsonlite)
 library(rlist)
+library(dplyr)
 
 # set apikey
 source("apikey.R")
 
+
+#******************************GERMANY******************************************
 
 # exercise 3: extract (first) venues Germany
 
 # retrieve data
 venueGE_raw <- GET(url = "https://app.ticketmaster.com/discovery/v2/venues?",
                    query = list(apikey = apikey,
-                   countryCode = "DE"))
+                   countryCode = "DE",
+                   locale = "*"))
 
 # extract content (for overview)
 content <- content(venueGE_raw)
 
 # extract json
-json_content_page <- content(venueGE_raw, as = 'text')
+json_content_page <- content(venueGE_raw, as = 'text', encoding = "UTF-8")
 
 # write to data frame & subset
-venueGE <- data.frame(fromJSON(json_content, flatten=TRUE)[[1]][[1]]) %>%
-  select('name', 'city.name', 'postalCode', 'address.line1', 'url', 'location.longitude', 'location.latitude')
-
+venueGE <- data.frame(fromJSON(json_content_page, flatten=TRUE)[["_embedded"]][["venues"]]) %>%
+  select("name", "city.name", "postalCode", "address.line1", "url", "location.longitude", "location.latitude")
 
 
 # exercise 4: extract all venues
 
-#n <- as.numeric(venueGE[["totalElements"]])
-n <- 100
+# get json to get totalElements
+venue_json <- fromJSON(json_content_page, flatten = TRUE)
+
+n <- as.numeric(venue_json[["page"]][["totalElements"]])
 print(n)
 
+# set size up to increase speed
+size = 200
+
 # Number of complete pages:
-maxpage <- floor(n/20)
+maxpage <- floor(n/size)
 print(maxpage)
 
 # Number of entries on the last incomplete page:
-remainder <- n-20*floor(n/20)
+remainder <- n-size*floor(n/size)
 print(remainder)
 
 # We initiate a dataframe in the correct dimensions to speed up our loop:
 allvenues_short <- data.frame(
   name  = character(n),
-  city.name   = character(n),
+  city   = character(n),
   postalCode = character(n),
-  address.line1   = character(n),
+  address   = character(n),
   url = character(n),
   longitude = character(n),
-  latitude = character(n))
+  latitude = character(n),
+  stringsAsFactors = FALSE)
 
-# We loop over the complete pages with 10 entries each:
-for (i in 1:maxpage) {
-  allvenues <- GET("https://app.ticketmaster.com/discovery/v2/venues?", 
-                    query = list(apikey = apikey,
-                                 countryCode = "DE",
-                                 pages   = i))
+# loop over pages and paste data into predefined dataframe
+for (i in 1:(maxpage)) {
+  all_venues <- GET(url = "https://app.ticketmaster.com/discovery/v2/venues/?",
+                   query = list(apikey = apikey,
+                                countryCode = "DE", 
+                                locale = "*",
+                                page   = (i-1),
+                                size = 200))
   
-  # extract json
-  json_content <- content(allvenues, as = 'text')
-
-  # We gradually fill our dataframe page by page (lines 1-10 in the first 
-  # iteration, lines 11-20 in the second iteration, ...):
-  allvenues_short[(20 * i - 19):(20 * i),] <- data.frame(fromJSON(json_content, flatten=TRUE)[[1]][[1]]) %>%
-    select('name', 'city.name', 'postalCode', 'address.line1', 'url', 'location.longitude', 'location.latitude')
+  json_content <- content(all_venues, as = "text", encoding = "UTF-8")
   
+  # parse content to json 
+  venue_json <- fromJSON(json_content, flatten = TRUE)[["_embedded"]][["venues"]]
+  
+  # if column doesn't exist put NA
+  venue_json$name[is.null(venue_json$name)] <- NA
+  venue_json$city.name[is.null(venue_json$city.name)] <- NA
+  venue_json$postalCode[is.null(venue_json$postalCode)] <- NA
+  venue_json$address.line1[is.null(venue_json$address.line1)] <- NA
+  venue_json$url[is.null(venue_json$url)] <- NA
+  venue_json$location.longitude[is.null(venue_json$location.longitude)] <- NA
+  venue_json$location.latitude[is.null(venue_json$location.latitude)] <- NA
+  
+  
+  allvenues_short[(size * i - (size-1)):(size * i),] <- data.frame(venue_json) %>%
+    #select colums
+    select("name", "city.name", "postalCode", "address.line1", "url", "location.longitude", "location.latitude")
   
   # pause in loop
-  Sys.sleep(0.2)
+  Sys.sleep(0.5)
 }
 
 
+# check for duplicates
+sum(duplicated(allvenues_short$name))
+
 # The last page is incomplete, hence we add it manually outside 
 # the loop, as in this particular case, the loop would cause problems otherwise:
-i <- i + 1
-res_movies <- GET("http://www.omdbapi.com/?", 
-                  query = list(apikey = omdb_key,
-                               s      = "batman",
-                               type   = "movie", 
-                               page   = i))
+#i <- i + 1
+all_venues <- GET(url = "https://app.ticketmaster.com/discovery/v2/venues/?",
+                 query = list(apikey = apikey,
+                              countryCode = "DE", 
+                              locale = "*",
+                              # start at page 0 as current page number counted from 0
+                              page   = i,
+                              size = remainder))
 
-movies_content <- content(res_movies)
+json_content <- content(all_venues, as = "text", encoding = "UTF-8")
 
-movies_df_short[(10 * i - 9):(n),] <- list.stack(movies_content$Search)
+# parse content to json 
+venue_json <- fromJSON(json_content, flatten = TRUE)[["_embedded"]][["venues"]]
+
+# Replace column by "NA" if it does not exists on each page
+venue_json$name[is.null(venue_json$name)] <- NA
+venue_json$city.name[is.null(venue_json$city.name)] <- NA
+venue_json$postalCode[is.null(venue_json$postalCode)] <- NA
+venue_json$address.line1[is.null(venue_json$address.line1)] <- NA
+venue_json$url[is.null(venue_json$url)] <- NA
+venue_json$location.longitude[is.null(venue_json$location.longitude)] <- NA
+venue_json$location.latitude[is.null(venue_json$location.latitude)] <- NA
+
+last_page <- data.frame(venue_json) %>%
+  #select colums
+  select("name", "city.name", "postalCode", "address.line1", "url", "location.longitude", "location.latitude")
+
+allvenues_short[(size * (i+1) - (size-1)):n,] <- last_page
+
+
+# plot
+plotdata <- allvenues_short
+
+# get class of columns & transform coordinates to numeric
+sapply(plotdata, class) 
+plotdata[c("longitude", "latitude")] <- sapply(plotdata[c("longitude", "latitude")],as.numeric)
+
+# drop outlier observations
+plotdata <- subset(plotdata, latitude > 47.271679 & latitude < 55.0846)
+plotdata <- subset(plotdata, longitude > 5.866944 & longitude < 15.043611)
+
+# plot venues
+ggplot() +
+  geom_polygon(
+    aes(x = long, y = lat, group = group), data = map_data("world", region = "Germany"),
+    fill = "grey90",color = "black") +
+  theme_void() + coord_quickmap() +
+  labs(title = "Event locations across Germany", caption = "Source: ticketmaster.com") +
+  theme(title = element_text(size=8, face='bold'),
+        plot.caption = element_text(face = "italic")) +
+  geom_point(aes(x = longitude, y = latitude),
+           data = plotdata,
+           color = "darkblue",
+           alpha = 0.8,
+           size = 1,
+           shape = 18)
+
