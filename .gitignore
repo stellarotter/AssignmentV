@@ -40,3 +40,6 @@ vignettes/*.pdf
 
 # API keys
 /apikey.R
+
+# Rmd file
+/rotter_stella_assignmentV.Rmd
