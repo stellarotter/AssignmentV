@@ -24,7 +24,7 @@ countrycode <- "FR"
 
 #******************************************************************************
 
-# exercise 3: extract (first) venues Germany
+# exercise 3: extract (first) venues
 
 # retrieve data
 venueGE_raw <- GET(url = "https://app.ticketmaster.com/discovery/v2/venues?",
