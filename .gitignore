@@ -43,3 +43,6 @@ vignettes/*.pdf
 
 # Rmd file
 /rotter_stella_assignmentV.Rmd
+
+# rendered html file
+/rotter_stella_assignmentV.html
